@@ -18,7 +18,9 @@ class T5WithDenseLayer(T5EncoderModel):
         config = t5encoder.config
         super().__init__(config)                                # Add Configuration
         super().load_state_dict(t5_encoder.state_dict())        # Add weigths   
-        self.dense = nn.Linear(config.hidden_size, output_dim)
+        self.dense1 = nn.Linear(config.hidden_size, 1024)
+        self.dense2 = nn.Linear(1024, 2048)
+        self.dense3 = nn.Linear(2048, output_dim)
         self.activation = nn.ReLU()
 
     def forward(
@@ -42,7 +44,10 @@ class T5WithDenseLayer(T5EncoderModel):
         )
 
         sequence_output = outputs.last_hidden_state
-        dense_output    = self.activation(self.dense(sequence_output))
+        dense_output    = self.activation(self.dense1(sequence_output))
+        dense_output    = self.activation(self.dense2(dense_output))
+        dense_output    = self.activation(self.dense3(dense_output))
+
 
         return BaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=dense_output,
@@ -131,7 +136,7 @@ class Arguments:
     def __init__(self):
         self.max_source_len         = 320
         self.max_target_len         = 128
-        self.encoder_model_name     = 'Salesforce/codet5p-220m'
+        self.encoder_model_name     = "Salesforce/codet5p-220m-bimodal"
         self.decoder_model_name     = 'gpt2'
         
         # Training parameters
@@ -157,7 +162,7 @@ args = Arguments()
 if __name__ == '__main__':
 
     wandb.login(key = os.environ['WANDB_KEYS'])
-    wandb.init(project='CodeT52GPT_Without_Dense_Layer', name = 'Experiement')
+    wandb.init(project='CodeT52GPT_With_Dense_mult_layer_encoder_freeze', name = 'Experiement')
 
     args = Arguments()
 
@@ -172,11 +177,16 @@ if __name__ == '__main__':
     gpt_tokenizer  = AutoTokenizer.from_pretrained(args.decoder_model_name)
     t5_encoder     = T5EncoderModel.from_pretrained(args.encoder_model_name)
     gpt2_decoder   = AutoModelForCausalLM.from_pretrained(args.decoder_model_name, **kwargs_decoder)
-    # t5encoderDense = T5WithDenseLayer(t5_encoder, gpt2_decoder.config.n_embd)
+    t5encoderDense = T5WithDenseLayer(t5_encoder, gpt2_decoder.config.n_embd)
 
-    model = EncoderDecoderModel(encoder=t5_encoder, decoder =gpt2_decoder)
+    model = EncoderDecoderModel(encoder=t5encoderDense, decoder =gpt2_decoder)
 
-   # training
+    # freeze Encoder layer
+    for name, param in model.encoder.named_parameters():
+        if 'encoder.block' in name:
+            param.requires_grad = False
+
+    # training
     model.config.decoder_start_token_id = gpt_tokenizer.bos_token_id
     model.config.eos_token_id           = gpt_tokenizer.eos_token_id
     model.config.pad_token_id           = gpt_tokenizer.eos_token_id
