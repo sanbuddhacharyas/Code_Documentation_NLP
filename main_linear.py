@@ -20,7 +20,10 @@ class T5WithDenseLayer(T5EncoderModel):
         super().load_state_dict(t5_encoder.state_dict())        # Add weigths   
         self.dense1 = nn.Linear(config.hidden_size, 1024)
         self.dense2 = nn.Linear(1024, 2048)
-        self.dense3 = nn.Linear(2048, output_dim)
+        self.dense3 = nn.Linear(4096, 4096)
+        self.dense4 = nn.Linear(4096, 4096)
+        self.dense5 = nn.Linear(4096, 2048)
+        self.dense6 = nn.Linear(2048, output_dim)
         self.activation = nn.ReLU()
 
     def forward(
@@ -47,7 +50,9 @@ class T5WithDenseLayer(T5EncoderModel):
         dense_output    = self.activation(self.dense1(sequence_output))
         dense_output    = self.activation(self.dense2(dense_output))
         dense_output    = self.activation(self.dense3(dense_output))
-
+        dense_output    = self.activation(self.dense4(dense_output))
+        dense_output    = self.activation(self.dense5(dense_output))
+        dense_output    = self.activation(self.dense6(dense_output))
 
         return BaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=dense_output,
